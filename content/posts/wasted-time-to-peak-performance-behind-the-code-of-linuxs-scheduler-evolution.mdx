@@ -1,0 +1,189 @@
+---
+title: "Wasted Time to Peak Performance: Behind the Code of Linux's Scheduler Evolution"
+description: "Tracing the Linux scheduler from round-robin roots to the Completely Fair Scheduler and the ideas that keep pushing it forward."
+date: "2024-04-10"
+tags: ["linux", "kernel", "scheduling", "systems"]
+draft: false
+originalUrl: "https://medium.com/@jgalt99/wasted-time-to-peak-performance-behind-the-code-of-linuxs-scheduler-evolution-d15a7a3e32cf"
+---
+
+![Credit: Canva AI Image generator](https://miro.medium.com/v2/resize:fit:1400/format:webp/1*PMNBwo631VafrZxEeTQy2Q.png)
+
+TL;DR:
+
+- Linux Kernel used a simple round-robin scheduler in the first years. Obviously, not useful for a modern computer as it was not efficient in terms of time complexity (O(n)) and also differentiating between processes.
+- In 2003, the new implementation of the Linux scheduler, named O(1), was introduced. More efficient, but unfair to interactive tasks.
+- The CFS algorithm was a suggested alternative to the O(1). Merged into Kernel in 2007. Got patches afterward.
+- New ideas for Linux's scheduler like using ML are on the way for specific use cases.
+
+But hold on, geeks! Shun the shallows!
+
+Linux's Kernel is widely used in more than 3 billion devices(!), and no doubt the scheduler plays a vital role in Linux's Kernel. A scheduler is a system software component that manages how tasks are executed on a computer. It is responsible for deciding which task to run next and how long. In a multitasking operating system, there are typically many tasks running simultaneously, so the scheduler must carefully manage the CPU to ensure that all tasks can progress. It must consider various factors, such as the priority of each process, the amount of CPU time each process has already used, and the availability of other resources. Maybe the most heated debates were over this part of Kernel. In this article, I want to elaborate briefly on its background and how it evolved to become what we now have. Let's get a better understanding of the Kernel scheduler, which is also helpful in understanding other scheduling systems.
+
+## Part I: Genesis of Kernel's Scheduler
+
+> 'schedule()' is the scheduler function. It's a very simple and nice
+> scheduler: it's not perfect, but certainly works for most things.
+>
+> Linus Torvalds comment on the schedule() function
+
+From 1991 when Torvalds published the first version of Kernel to 2003, in which O(1) scheduler was introduced, Kernel's scheduler was a simple round-robin algorithm. In a round-robin scheduler, each task is given an equal amount of time to run, and then the scheduler switches to the next task in the queue. Easy to implement and understand.
+
+![Kernel's first scheduler](https://miro.medium.com/v2/resize:fit:1400/format:webp/1*ZF0ttdMXhqdhFkK6LCr6rw.png)
+
+As you can see [here](https://github.com/AMK9978/ArchaicKernel/blob/4b5fd829cb2d8aa9be3e1dc48149c7ea00d5a0d3/kernel/sched.c) or download it from [here](https://mirrors.edge.kernel.org/pub/linux/kernel/Historic/old-versions/), first, the scheduler checks for any tasks that have an alarm that has expired. If there are any such tasks, they are marked as runnable (_TASK_RUNNING_). Then, there is a while loop over all of the runnable tasks to find the task with the **highest** **counter**. The counter is a value that is decremented each time a task runs. When the counter reaches zero, the task is preempted. If there is no runnable task with a counter greater than zero, the **schedule()** function increments the counter of each runnable task by half. This ensures that all runnable tasks will eventually be able to run. Once the **schedule()** function has found the task with the highest counter, it switches to that task. This code stayed almost the same till the 2.6 version was introduced 12 years later in 2003.
+
+## Part II: In the Ring: The Wasteful Scheduler
+
+> Linus, sharing queue and lock between CPUs for a "thing" highly frequency
+> ( schedule()s + wakeup()s ) accessed like the scheduler it's quite ugly
+> and it's not that much funny. And it's not only performance wise, it's
+> more design wise...
+>
+> Why not 2.5.x ?
+>
+> Davide Libenzi
+
+![captionless image](https://miro.medium.com/v2/resize:fit:1000/format:webp/1*ddPgwSU8JL5QzTfN-3_5KA.jpeg)
+
+In Dec 2001, [Scheduler ( was: Just a second )](https://lkml.iu.edu/hypermail/linux/kernel/0112.2/0333.html) broke out a series of debates over the deficits of the initial kernel scheduler. The whole thread and its following threads are worth a glimpse, but for brevity, I just highlight its important discussions leading to the O(1) algorithm. The biggest issues with the kernel's round-robin scheduler were:
+
+1. Global **runqueue** for all CPU processors, leading to wasted time locking and unlocking the jobs. Ideally, each processor should have its own locking and individual runqueue. A runqueue is the list of runnable processes from which the scheduler chooses. Therefore, the scheduler needs to have an optimized way to group tasks on each core, and only do **work stealing** (migrate tasks from one core to another) to resolve imbalances in runqueue length.
+2. O(n) time complexity. Therefore, the new scheduler should provide O(1) scheduling.
+
+The interesting takeaway from their discussion is how Libenzi and other new scheduler proponents presented the old scheduler's pros and cons, and how Linus defends the old one. Linus in his [first response](https://lkml.iu.edu/hypermail/linux/kernel/0112.2/0336.html) wrote:
+
+> "Design wise" is highly overrated.
+>
+> Simplicity is much more important, if something commonly is only done a
+> few hundred times a second. Locking overhead is basically zero for that
+> case...
+>
+> 4 CPUs are "high end" today. We can probably point to tens of thousands
+> of UP machines for each 4-way out there. The ratio gets even worse for 8,
+> and 16 CPUs is basically a rounding error.
+>
+> You have to prioritize. Scheduling overhead is way down the list.
+>
+> Linus
+>
+> So are we talking about "we spend 40-60% of all CPU cycles in the
+> scheduler" or are we talking about "we spend 40-60% of the CPU power of
+> one CPU out of 8 in the scheduler".
+>
+> Yes, 40-60% sounds like a lot ("Wow! About half the time is spent in the
+> scheduler"), but I bet it's 40-60% of one CPU, which really translates
+> to "The worst scheduler case I've ever seen under a real load spent 5-8%
+> of the machine CPU resources on scheduling".
+>
+> Linus
+>
+> ...I've told you a number of times that I'd like to see the preliminary
+> implementation publicly discussed and some uses outside of private
+> companies that I have no insight into..
+>
+> Linus
+
+A few days later, Ingo Molnar suggested the [O(1) scheduler patch](https://lkml.iu.edu/hypermail/linux/kernel/0201.0/0810.html).
+
+## Part III: O(1) Comes Into Play
+
+In 2003, the Linux kernel scheduler was upgraded from a simple round-robin algorithm to the O(1) scheduler. This means that the O(1) scheduler can schedule tasks in constant time. A significant improvement.
+
+![Simplified O(1) code. See its original implementation here](https://miro.medium.com/v2/resize:fit:1400/format:webp/1*tYOQq7QbjKxtPxFAuPYI6w.png)
+
+The O(1) scheduler achieves constant-time scheduling by using per-CPU runqueues and two arrays: the **active array** and the **expired array**. The active array contains all the tasks currently ready to run. The expired array contains all of the tasks that have been running and have now expired (their counters have reached 0). When a task expires, it is moved from the active array to the expired array, and its counter is replenished by half of its initial counter. Therefore, it can be run again, and the scheduler allows new tasks not to be starved. When the scheduler needs to select a new task to run, it simply selects the first task in the active array. When all tasks expire, a switch between active and expired arrays happens via swapping their pointers to be efficient.
+
+Please note that the above explanation was for the normal tasks ([SCHED_NORMAL](https://github.com/AMK9978/ArchaicKernel/blob/415b3effd8b37744e690db1c87b6f9ce059034f0/include/linux/sched.h#L126)) and not real-time ones. The real-time tasks are always considered active and if multiple real-time tasks happen to have the same priority, the scheduler applies the FIFO method.
+
+The O(1) scheduler has several advantages over the round-robin scheduler:
+
+- **Improved time complexity:** The O(1) scheduler can schedule tasks much faster than the round-robin scheduler. This is because the O(1) scheduler does not need to iterate through all of the tasks in the runqueue to find the next task to run. Instead, it simply selects the first task in the active array.
+- **Improved scalability:** In the previous one, the more processors, the more lock contention because of the global runqueue. Now, we've got a multi-queue scheduler, each processor one queue.
+- **Improved affinity:** Instead of bouncing processes between multiple processors (ping-pong effect), now, thanks to the multi-queue design, processes stay on the same processor. Just in case of balancing the number of processes between processors, a special load balancer mechanism migrates processes to even out the runqueues, which is infrequent.
+- **Better support for interactive tasks:** The O(1) scheduler uses a priority-based scheduling algorithm, which ensures that interactive tasks (tasks that require immediate user feedback, such as typing or clicking) are given more CPU time than non-interactive tasks. It marks a process interactive based on its average time sleep (time spent to receive input from the user).
+- **More flexible:** The O(1) scheduler allows for tasks to be assigned priorities, giving the scheduler more control over how CPU time is allocated to tasks. This is in contrast to the round-robin scheduler, which does not allow for tasks to be assigned different priorities.
+
+Overall, the O(1) scheduler represented a notable advancement over the round-robin scheduler in performance, scalability, and flexibility.
+
+## Part IV: Controversies
+
+Despite all of the improvements that the O(1) scheduler had brought with itself, within a short time, it went through a series of heated debates over its fairness and effectiveness.
+
+One of the main criticisms of the O(1) scheduler was that it could be unfair to interactive tasks. This was because the O(1) scheduler used a priority-based algorithm, prioritizing tasks running for longer periods. This means that interactive tasks, which typically have shorter runtimes, could be starved of CPU time by longer-running tasks.
+
+Another criticism of the O(1) scheduler was that it could be inefficient for handling I/O-bound tasks. I/O-bound tasks are tasks that spend a lot of time waiting for I/O operations to complete. The O(1) scheduler treated all tasks equally, regardless of whether they were I/O-bound or CPU-bound. This meant that I/O-bound tasks could waste CPU time by spinning in tight loops while waiting for I/O operations to complete.
+
+One example of such debate is a debate that took place in 2003 between Linus Torvalds and Andrew Morton, a prominent Linux kernel developer. Morton argued that the O(1) scheduler was unfair to interactive tasks because it prioritized tasks running longer. Torvalds argued that the O(1) scheduler was necessary to improve performance and scalability and that he was willing to sacrifice fairness to achieve those goals.
+
+Based on the [The Linux Scheduler: a Decade of Wasted Cores](https://blog.acolyer.org/2016/04/26/the-linux-scheduler-a-decade-of-wasted-cores/), it calls the O(1) scheduler "wasted cores" because it can lead to underutilization of CPU cores because the O(1) scheduler does not always choose the best task to run on a given CPU core. For example, imagine once a task entered the expired queue, it would not get a chance to run again until all other tasks in the active queue had executed for their timeslices. This caused issues for interactive tasks, introducing jitter into interactions that should appear seamless and not making any fairness guarantees.
+
+Another example is when the O(1) scheduler is used on a NUMA system. A NUMA system is a type of computer architecture that has multiple memory nodes. Each memory node has its CPU cores and memory. The O(1) scheduler can sometimes choose to run tasks on CPU cores that are not close to the memory node that the task is using. This can lead to decreased performance because the task will have to access memory from a remote node.
+
+## Part V: Transition to CFS
+
+![CFS algorithm for scheduling tasks using Red-Black tree structure. source](https://miro.medium.com/v2/resize:fit:918/format:webp/1*huX4DV2SwJ7wBkbpXX9fKQ.png)
+
+> "CFS is a good scheduler. It's fair, it's efficient, and it scales well. It's the right scheduler for the Linux kernel."
+>
+> Linus Torvalds on CFS
+
+The Linux kernel integrated the **Completely Fair Scheduler** (CFS) into its 2.6.23 release, making it the default scheduler for tasks in the **SCHED_NORMAL** class (i.e., those without real-time execution constraints). CFS manages CPU resource allocation for processes, striving to optimize overall CPU utilization and enhance interactive performance.
+
+It works as such:
+
+1. The leftmost node of the scheduling tree is chosen (as it will have the lowest spent execution time) and sent for execution.
+2. If the process simply completes execution, it is removed from the system and scheduling tree.
+3. If the process reaches its maximum execution time or is otherwise stopped (voluntarily or via interrupt) it is reinserted into the scheduling tree based on its newly spent execution time.
+4. The new leftmost node will then be selected from the tree, repeating the iteration.
+
+If we take a look at a real example case that is illustrated by Nayan Dubey [here](https://medium.com/@nayandubey2001/implementation-of-completely-fair-scheduler-cfs-algorithm-of-linux-356829d54243), it can make more sense. In the below example, we assume three tasks in the runqueue, and the scheduler runs the tasks based on their weights (from highest to lowest priority):
+
+- Task A: runtime = 5 (the most important task)
+- Task B: runtime = 15
+- Task C: runtime = 20 (less important task)
+
+Then, CFS uses a binary search tree structure as its runqueue. Each node in the tree represents a task. The leftmost node in the tree will always be the task in the runqueue with the least runtime. Therefore, CFS can quickly find the task that has consumed the least CPU time and schedule it to run next.
+
+Depending on the scenario, another strategy can be applied: a complexity class where the queue is made on process groups instead of each task, meaning there are two groups: A and B. A has 4 tasks to run while B has 6. What CFS does is share the CPU power equally between them to 50%, and then the power is distributed among those tasks based on their weight (priority) and the time they have waited for the CPU. In other words, while there is one runqueue per CPU, there can be multiple runqueues (runqueue hierarchy) attributed to each of those runqueues because of multiple groups.
+
+![A piece of sched.h code](https://miro.medium.com/v2/resize:fit:1400/format:webp/1*mrxDUBlaxVOaEB-lY2dg0A.png)
+
+![A piece of sched.c code](https://miro.medium.com/v2/resize:fit:1400/format:webp/1*dDinHRZ3PqhrY0UOSPmltw.png)
+
+![A piece of sched_fair.c code](https://miro.medium.com/v2/resize:fit:1400/format:webp/1*mIqsebqMUmK14RWOt5BZqw.png)
+
+As you can see above and in the source code, the scheduler code is modularized into different implementation codes (sched_fair.c, sched_rt.c) based on the policy ([SCHED_NORMAL, SCHED_RR, etc](https://github.com/torvalds/linux/blob/ddf28352b80c86754a6424e3a61e8bdf9213b3c7/include/linux/sched.h#L36)). In the above example, you can see how _pick_next_task_, which is called in the _sched.c_, is implemented in _sched_fair.c_.
+
+CFS was chosen as the default scheduler for Linux kernel v2.6.23 because it addresses the main drawbacks of the O(1) scheduler:
+
+- **Fairness:** CFS is fairer to interactive tasks than the O(1) scheduler. This is because CFS uses a priority-based scheduling algorithm, which gives higher priority to interactive tasks.
+- **Efficiency:** CFS is more efficient than the O(1) scheduler for handling I/O-bound tasks. This is because CFS does not waste CPU time by spinning I/O-bound tasks in tight loops while waiting for I/O operations to complete.
+- **Scalability:** CFS is more scalable than the O(1) scheduler. This is because CFS can handle a large number of tasks running on the system without sacrificing performance while its time complexity is O(log(n)).
+
+One of the main reasons why Torvalds changed his mind about CFS was because of the work of **Ingo Molnar**, the main developer of CFS. Molnar could demonstrate that CFS could achieve performance and scalability comparable to the O(1) scheduler, while also being fairer and more efficient.
+
+Another reason why Torvalds changed his mind about CFS was because of the feedback from Linux kernel users. Many users reported that CFS was a major improvement over the O(1) scheduler, especially for interactive tasks and I/O-bound tasks.
+
+In 2007, Torvalds merged CFS into the Linux kernel and made it the default scheduler for the **SCHED_NORMAL** class. This was a significant decision, as it meant that CFS would be used by the vast majority of tasks running on Linux systems.
+
+## Part VI: Continued Developments
+
+The Linux kernel scheduler has continued to evolve since the introduction of the Completely Fair Scheduler (CFS) in 2007. New features and performance improvements have been added to CFS over the years, making it even more efficient and fair.
+
+One of the notable developments in the Linux kernel scheduler has been supporting heterogeneous multi-core processors (HMPs). HMPs are processors that have a mix of different cores with varying clock speeds or instruction sets. The Linux kernel scheduler now supports HMPs by using a technique called dynamic voltage and frequency scaling (DVFS). DVFS allows the scheduler to adjust both the clock speed and voltage of each core based on the workload. This helps to improve performance and reduce power consumption.
+
+One area of active research in the Linux kernel scheduler community is the use of machine learning to improve scheduling decisions. Machine learning could be used to predict the future workload and to adjust the scheduler accordingly. This could help to improve performance and fairness.
+
+Another area of active research is the use of distributed scheduling to improve scalability. Distributed scheduling would allow the scheduler to distribute the load of scheduling tasks across multiple CPU cores. This could help to improve scalability and performance on large systems.
+
+## Conclusion
+
+In this blog post, we went through the evolution of the Kernel's scheduler in Linux. We began with the simplest form of a scheduler. Then, over time, it evolved in terms of time complexity but brought new challenges. Furthermore, O(1) was replaced by CFS to perform fairer and more efficiently. Finally, we glanced over the further works on the Kernel's scheduler. For further reading, you can look at the [Kernel's scheduler documentation](https://github.com/torvalds/linux/blob/master/Documentation/scheduler/sched-design-CFS.rst).
+
+Thanks a lot for reading so far. I would appreciate it if you hit the claps button to support my first Medium blog post! Further, you can find me on [Github](https://github.com/amk9978/) and [X](https://twitter.com/amir_k9978).
+
+## References
+
+- [Introducing the 2.6 Kernel](https://www.linuxjournal.com/article/6530)
+- [Completely Fair Scheduler](https://www.linuxjournal.com/node/10267)
