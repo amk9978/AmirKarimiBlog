@@ -1,95 +1,74 @@
-# AMK Personal Site
+# Amir Karimi — Personal Site & Blog
 
-A minimal personal website and blog built with Next.js, local MDX posts, RSS, sitemap, and Vercel-friendly defaults.
+A fast, minimal Next.js site that serves as the canonical home for Amir Karimi's writing. Posts live in the repo as MDX files, publish to `/blog`, and feed the RSS/sitemap routes for syndication.
 
-## Stack
-
-- Next.js App Router
-- Local `.mdx` posts in `content/posts`
-- RSS route at `/rss.xml`
-- Sitemap at `/sitemap.xml`
-- Vercel deployment-ready
-
-## Local setup
+## Getting Started
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open http://localhost:3000.
+The dev server runs at http://localhost:3000. Run a production check with:
 
-## Edit identity
-
-Update:
-
-```text
-lib/site.ts
+```bash
+npm run build
 ```
 
-Most important field before production:
+## Configuration
 
-```ts
-url: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"
-```
+Set the public site URL in your environment:
 
-On Vercel, set:
-
-```text
+```env
 NEXT_PUBLIC_SITE_URL=https://your-domain.com
 ```
 
-## Add a post
+For local work this defaults to `http://localhost:3000`, and `.env.example` contains the baseline value.
 
-Create a new file:
+## Writing Workflow
 
-```text
-content/posts/my-post-slug.mdx
-```
+### Add a New Post
 
-Use this frontmatter:
+1. Create `content/posts/my-new-post.mdx`.
+2. Add frontmatter:
 
-```mdx
----
-title: "Post title"
-description: "Short SEO/social summary."
-date: "2026-06-11"
-tags: ["software", "ai"]
-draft: false
----
+   ```mdx
+   ---
+   title: "Post title"
+   description: "Short SEO summary."
+   date: "2024-06-01"
+   tags: ["software", "ai"]
+   draft: false
+   originalUrl: "https://external-url.com/article" # optional
+   ---
+   
+   Your post content here.
+   ```
 
-Your post here.
-```
+3. Set `draft: true` to keep it out of `/blog` and the RSS feed. Change to `false` when you publish.
 
-## Import your Medium article
+Reading time is calculated automatically and appears in the list + post header.
 
-Use the draft template:
+### Cross-Posting to Medium/Substack
 
-```text
-content/posts/imported-medium-article-template.mdx
-```
+1. Publish on this site first so it becomes the source of truth.
+2. Use this site's URL as the canonical link when importing or republishing elsewhere.
+3. Copy the article into Medium/Substack manually (or use their import tool) and point readers back here.
 
-Recommended flow:
+## Project Layout
 
-1. Copy the Medium article into Markdown/MDX.
-2. Preserve the original publish date in `date`.
-3. Add the original Medium URL in `originalUrl`.
-4. Publish it on this site.
-5. Edit the Medium story and set the canonical link to the new page on this site.
+- `app/` — routes, metadata, RSS/sitemap/robots
+- `components/` — shared UI (e.g. `Header`)
+- `content/posts/` — MDX posts with frontmatter
+- `lib/` — post loader and site metadata helpers
+
+Imports use the `@/` alias defined in `tsconfig.json`.
 
 ## Deploy to Vercel
 
-1. Push this folder to GitHub.
-2. Import the GitHub repo into Vercel.
-3. Set the environment variable:
+1. Push this repository to GitHub.
+2. Create a new Vercel project from the repo.
+3. Add the environment variable `NEXT_PUBLIC_SITE_URL` with your production domain.
+4. Trigger a deploy. Vercel will run `npm install` and `npm run build` automatically.
 
-```text
-NEXT_PUBLIC_SITE_URL=https://your-domain.com
-```
-
-4. Deploy.
-
-
-## Import paths
-
-This starter intentionally uses relative imports instead of `@/` aliases so it works cleanly with both Webpack and Turbopack.
+Once deployed, `/rss.xml`, `/sitemap.xml`, and `/robots.txt` stay in sync with your published posts.

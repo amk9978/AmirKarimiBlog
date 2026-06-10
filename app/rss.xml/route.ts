@@ -1,5 +1,5 @@
-import { getAllPosts } from "../../lib/posts";
-import { site } from "../../lib/site";
+import { getAllPosts } from "@/lib/posts";
+import { site } from "@/lib/site";
 
 function escapeXml(value: string) {
   return value

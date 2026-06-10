@@ -1,15 +1,15 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { MDXRemote } from "next-mdx-remote/rsc";
-import { getAllPosts, getPostBySlug, getPostSlugs } from "../../../lib/posts";
-import { site } from "../../../lib/site";
+import { getAllPosts, getPostBySlug, getPostSlugs } from "@/lib/posts";
+import { site } from "@/lib/site";
 
 export function generateStaticParams() {
-  return getPostSlugs().map((slug) => ({ slug }));
+  return getAllPosts().map((post) => ({ slug: post.slug }));
 }
 
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
-  const { slug } = await params;
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+  const { slug } = params;
   const post = getAllPosts().find((item) => item.slug === slug);
   if (!post) return {};
 
@@ -34,8 +34,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   };
 }
 
-export default async function PostPage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
+export default function PostPage({ params }: { params: { slug: string } }) {
+  const { slug } = params;
 
   if (!getPostSlugs().includes(slug)) {
     notFound();

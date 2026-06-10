@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { getAllPosts } from "../lib/posts";
-import { site } from "../lib/site";
+import { getAllPosts } from "@/lib/posts";
+import { site } from "@/lib/site";
 
 export default function HomePage() {
   const posts = getAllPosts().slice(0, 3);

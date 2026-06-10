@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { site } from "../lib/site";
+import { site } from "@/lib/site";
 
 export function Header() {
   return (
