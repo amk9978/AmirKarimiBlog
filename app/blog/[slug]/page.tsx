@@ -5,7 +5,9 @@ import { getAllPosts, getPostBySlug, getPostSlugs } from "@/lib/posts";
 import { site } from "@/lib/site";
 
 export function generateStaticParams() {
-  return getAllPosts().map((post) => ({ slug: post.slug }));
+  return getPostSlugs()
+    .filter((slug) => !getPostBySlug(slug).draft)
+    .map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
