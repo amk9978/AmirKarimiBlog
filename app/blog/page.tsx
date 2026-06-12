@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { getAllPosts } from "@/lib/posts";
+import { BlogPosts } from "@/components/posts";
+import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Blog",
@@ -8,25 +8,23 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "/blog",
   },
+  openGraph: {
+    title: `${site.name} — Blog`,
+    description: "Writing on software engineering, AI infrastructure, and systems design.",
+    url: `${site.url}/blog`,
+  },
 };
 
 export default function BlogIndexPage() {
-  const posts = getAllPosts();
-
   return (
-    <section className="stack">
-      <h1>Blog</h1>
-      <p className="lead">Essays, engineering notes, and startup thinking.</p>
-      <div className="post-list">
-        {posts.map((post) => (
-          <article key={post.slug} className="post-card">
-            <p className="meta">{new Date(post.date).toLocaleDateString("en", { dateStyle: "medium" })} · {post.readingTime}</p>
-            <h2><Link href={`/blog/${post.slug}`}>{post.title}</Link></h2>
-            <p>{post.description}</p>
-            {post.tags.length > 0 && <p className="tags">{post.tags.map((tag) => `#${tag}`).join(" ")}</p>}
-          </article>
-        ))}
+    <section className="space-y-6">
+      <div>
+        <h1 className="font-semibold text-2xl mb-2 tracking-tighter">Blog</h1>
+        <p className="text-neutral-600 dark:text-neutral-400">
+          Essays on backend systems, AI tooling, infrastructure, and the practicality behind technical taste.
+        </p>
       </div>
+      <BlogPosts />
     </section>
   );
 }
