@@ -4,7 +4,7 @@ import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Blog",
-  description: "Essays and notes by Amir Mohammad Karimi.",
+  description: "Essays and engineering notes by Amir Karimi.",
   alternates: {
     canonical: "/blog",
   },

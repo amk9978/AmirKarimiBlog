@@ -19,6 +19,7 @@ function ArrowIcon() {
 }
 
 const footerLinks = [
+  { href: "/about", label: "about" },
   { href: "/rss.xml", label: "rss" },
   { href: site.github, label: "github", external: true },
   { href: site.linkedin, label: "linkedin", external: true },
